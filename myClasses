@@ -1,0 +1,257 @@
+import random
+
+
+def clamp(n, minn, maxn):
+  #keeps a value between a minimum and maximum value
+  #if n is above the max it returns max
+  #if n is below the min it return min
+  #otherwise it returns n
+  return max(min(maxn, n), minn)
+
+class Grid():
+  def __init__(self,width,height):
+    self.width = width
+    self.height = height
+    self.numfox = 0
+    self.probfox = 15
+    self.probrab = 30
+    self.numrab = 0
+    self.environment = []
+    for row in range(height):
+      row = []
+      for column in range(width):
+        row.append(Cell())
+      self.environment.append(row)
+
+  def addFoxes(self, number): #place each Fox into an empty cell
+    while number > 0:
+      x = random.randint(0,self.width-1)
+      y = random.randint(0,self.height-1)
+      if self.environment[y][x].inhabitant == []: #if cell is empty (no inhabitants)
+        self.environment[y][x].inhabitant.append(Fox(x,y))
+        number = number - 1 
+
+  def addRabbits(self, number): #place each Rabbit into an empty cell
+    while number > 0:
+      x = random.randint(0,self.width-1)
+      y = random.randint(0,self.height-1)
+      if self.environment[y][x].inhabitant == []: #if cell is empty (no inhabitants)
+        self.environment[y][x].inhabitant.append(Rabbit(x,y))
+        number = number - 1
+
+
+  def displayGrid(self):
+    for row in range(self.height):
+      for column in range(self.width):
+        print(f"{self.environment[row][column].getFood()}{self.environment[row][column].getInhabitant()}",end="|")
+      print()
+      
+  def processMove(self):
+    rabbitMove = []
+    foxMove = []
+    for row in range(self.height):
+      for column in range(self.width):
+        #alter food - increase all by 1 with a chance of 50%
+        if random.randint(1,2)>1:
+          self.environment[row][column].food = clamp(self.environment[row][column].food+1,0,10)
+        
+        for animal in self.environment[row][column].inhabitant:
+          if isinstance(animal,Rabbit):
+            newx,newy = animal.getMove()
+            rabbitMove.append( [(column,row),(newx,newy)])
+            #decrease cells food with rabbit by 1
+            self.environment[row][column].food = clamp(self.environment[row][column].food-1,0,10)
+            for index in range(len(self.environment[row][column].inhabitant)):
+              if isinstance(self.environment[row][column].inhabitant[index], Fox):
+                self.environment[row][column].inhabitant[index].hunger += 10
+                break  
+  
+          if isinstance(animal,Fox):
+            newx,newy = animal.getMove()
+            foxMove.append( [(column,row),(newx,newy)])            
+    for move in rabbitMove:
+      #find the rabbit - first part of move - and then move to second part of move
+      for index in range(len(self.environment[move[0][1]][move[0][0]].inhabitant)):
+        if isinstance(self.environment[move[0][1]][move[0][0]].inhabitant[index], Rabbit):
+          rabbit = self.environment[move[0][1]][move[0][0]].inhabitant[index]
+          self.environment[move[0][1]][move[0][0]].inhabitant.pop(index)
+
+          rabbit.lifespan -= 1
+          if rabbit.lifespan > 0:
+            self.environment[move[1][1]][move[1][0]].inhabitant.append(rabbit)
+          break
+
+    for move in foxMove:
+      for index in range(len(self.environment[move[0][1]][move[0][0]].inhabitant)):
+        if isinstance(self.environment[move[0][1]][move[0][0]].inhabitant[index], Fox):
+          fox = self.environment[move[0][1]][move[0][0]].inhabitant[index]
+          fox.hunger -= 2 #fox makes move so reduce hunger
+          self.environment[move[0][1]][move[0][0]].inhabitant.pop(index)
+          self.environment[move[1][1]][move[1][0]].inhabitant.append(fox)
+          break
+    
+    #now check for Fox eat Rabbit
+    self.runFoxesEatRabbits()
+    #now check for reproduction
+    self.runRabbitsReproduce()
+    self.runFoxReproduce()
+    #now kill off hungry foxes (hunger < 0)
+    self.runHungryFoxesDie()
+    self.runHungryRabbitDie()
+  def runFoxReproduce(self):
+    for row in range(self.height):
+      for column in range(self.width):
+        animals = self.environment[row][column].inhabitant
+        if sum(isinstance(animal, Fox) for animal in animals)>=2: #check for 2 or more rabbits in this cell
+            #print("Checking for male and female in cell",column,row)
+          female,male=0,0
+          for index in range(len(self.environment[row][column].inhabitant)): #count up the males and females
+            if isinstance(self.environment[row][column].inhabitant[index], Fox):
+              if self.environment[row][column].inhabitant[index].gender == "F":
+                female += 1
+              else:
+                male += 1
+            #print("M",male,"F",female)
+          if self.numfox%20 == 0 and self.probfox != 7:
+            self.probfox -= 1
+          if female >=1 and male >= 1 and random.randint(0,self.probfox)>5:
+             # print("Reproducing")
+            self.environment[row][column].inhabitant.append(Fox(column,row))
+            self.numfox += 1
+  def runRabbitsReproduce(self):
+    for row in range(self.height):
+      for column in range(self.width):
+        animals = self.environment[row][column].inhabitant
+        if sum(isinstance(animal, Rabbit) for animal in animals)>=2: #check for 2 or more rabbits in this cell
+          #print("Checking for male and female in cell",column,row)
+          female,male=0,0
+          for index in range(len(self.environment[row][column].inhabitant)): #count up the males and females
+            if isinstance(self.environment[row][column].inhabitant[index], Rabbit):
+              if self.environment[row][column].inhabitant[index].gender == "F":
+                female += 1
+              else:
+                male += 1
+          #print("M",male,"F",female)
+          if self.numrab % 10 == 0 and self.probrab != 7:
+            self.probrab -= 1
+          if female >=1 and male >= 1 and random.randint(0,self.probrab)>5:
+           # print("Reproducing")
+            self.environment[row][column].inhabitant.append(Rabbit(column,row))
+            self.numrab += 1
+    
+
+  def runFoxesEatRabbits(self):
+    for row in range(self.height):
+      for column in range(self.width):
+        animals = self.environment[row][column].inhabitant
+        if sum(isinstance(animal, Fox) for animal in animals)>=1 and sum(isinstance(animal, Rabbit) for animal in animals)>=1: #check for at least one fox and at least one rabbit in this cell
+          #print("Fox eats rabbit in cell",column,row)
+          for index in range(len(self.environment[row][column].inhabitant)):
+            if isinstance(self.environment[row][column].inhabitant[index], Fox):
+              self.environment[row][column].inhabitant[index].hunger += 10
+              break
+          for index in range(len(self.environment[row][column].inhabitant)):
+            if isinstance(self.environment[row][column].inhabitant[index], Rabbit):
+              self.environment[row][column].inhabitant.pop(index)
+              break
+        if sum(isinstance(animal, Fox) for animal in animals)>=2:
+          if random.randint(0,10)>8:
+            self.environment[row][column].inhabitant.append(Fox(row,column))
+              
+  def runHungryFoxesDie(self):
+    for row in range(self.height):
+      for column in range(self.width):
+        for index in range(len(self.environment[row][column].inhabitant)):
+          if isinstance(self.environment[row][column].inhabitant[index], Fox):
+              hunger = self.environment[row][column].inhabitant[index].hunger
+              if hunger < 0:
+                #print("Fox dies from hunger at",column,row)
+                self.environment[row][column].inhabitant.pop(index)
+                break 
+  def runHungryRabbitDie(self):
+    for row in range(self.height):
+      for column in range(self.width):
+        for index in range(len(self.environment[row][column].inhabitant)):
+          if isinstance(self.environment[row][column].inhabitant[index], Rabbit):
+              hunger = self.environment[row][column].inhabitant[index].hunger
+              if hunger <= 0:
+                self.environment[row][column].inhabitant.pop(index)
+                print("A")
+                break  
+  def __repr__(self):
+    return f"GRID[ {self.environment}]"
+    
+class Cell():
+
+  def __init__(self):
+    self.food = random.randint(1,10)
+    self.inhabitant = []
+  
+  def getFood(self):
+    return self.food
+
+  def getInhabitant(self):
+    if self.inhabitant == []:
+      return " "
+    else:
+      return f"{self.inhabitant}"[:1]
+  
+  def __repr__(self):
+    return f"CELL[{self.food} {self.inhabitant}]"
+
+class Animal():
+  def __init__(self,x,y):
+    self.num = 0
+    self.x = x
+    self.y = y
+    self.gender = "M"
+    self.lifespan = random.randint(-50,50)+100
+
+class Fox(Animal):
+        
+  def __init__(self,x,y):
+    super().__init__(x,y)
+    self.hunger = 38
+    if random.randint(1,10)>5:
+      self.gender = "M"
+    else:
+      self.gender = "F"
+  
+  def getMove(self):
+    dx = random.randint(-1, 1)
+    dy = random.randint(-1, 1)
+    self.x = clamp(self.x + dx, 0, 19)
+    self.y = clamp(self.y + dy, 0, 19)
+    return self.x, self.y
+    '''
+    for row in range( self.y - 2, self.y + 3):
+      for col in range( self.x - 2, self.x + 3):
+        #print(f"{col},{row}",end=" ")
+        if isinstance([row][col].inhabitant,Rabbit):
+          print("RABBIT")
+    '''
+  
+  def __repr__(self):
+    return f"FOX"
+
+class Rabbit(Animal):
+
+  def __init__(self,x,y):
+    super().__init__(x,y)
+    self.hunger = 38
+    #random choice of gender - more females than males (60:40)
+    if random.randint(1,10)>5:
+      self.gender = "M"
+    else:
+      self.gender = "F"
+  
+  def getMove(self):             #random move 1 square LRUD
+    dx = random.randint(-1,1)
+    dy = random.randint(-1,1)
+    self.x = clamp(self.x+dx,0,19)
+    self.y = clamp(self.y+dy,0,19)
+    
+    return self.x, self.y
+    
+  def __repr__(self):
+    return f"RABBIT"
